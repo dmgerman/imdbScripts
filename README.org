@@ -1,0 +1,183 @@
+* Create the basic data 
+
+create a database imdb
+
+using psql do this in the imdb database
+
+-- this is done with do.sql
+
+\i color.sql 
+\i countries.sql 
+\i languages.sql 
+\i links.sql 
+\i locations.sql 
+\i movies.sql 
+\i person.sql 
+\i ratings.sql
+\i roles.sql 
+\i roles.sql 
+
+\i directors.sql 
+
+* Importing data from the database
+
+
+COPY roles2 from '/tmp/actorRoles.txt' with delimiter '|';
+COPY roles2 from '/tmp/actorRoles.txt' with delimiter '|';
+COPY roles4 from '/tmp/actressRoles.txt' with delimiter '|';
+COPY roles3 from '/tmp/dirs.txt' with delimiter '|';
+
+COPY color from '/tmp/color.txt' with delimiter '|';
+COPY countries from '/tmp/countries.txt' with delimiter '|';
+COPY directors from '/tmp/directors.txt' with delimiter '|';
+COPY genres from '/tmp/genres.txt' with delimiter '|';
+COPY languages from '/tmp/languages.txt' with delimiter '|';
+COPY links from '/tmp/links.txt' with delimiter '|';
+COPY locations from '/tmp/locations.txt' with delimiter '|';
+
+
+
+copy persons2  from '/tmp/dirs-persons.txt' with delimiter '|';
+copy persons0  from '/tmp/actors.txt' with delimiter '|';
+
+* Fix the persons
+
+-- Fix persons
+
+-- first the ones that are male and female
+create temp table tempper as select pid, lastname, firstname, index from personsm intersect select pid, lastname, firstname, index from personsf;
+
+
+--Union them:
+create table persons as select * from personsm union select * from personsf;
+-- remove the "dual" ones
+delete from persons where (pid, lastname,firstname, index) in (select * from tempper);
+
+--add the directors that are not already in
+
+ insert into persons select pid, lastname, firstname, index, null from persons2 except select pid, lastname, firstname, index, null from persons;
+
+* Fix productions
+
+use fix-productions.sql
+
+
+
+
+* Roles
+
+--Count the roles2 and roles4
+
+select count(*) from (select distinct id, pid, character from roles2) as rip;
+select count(*) from roles2;
+
+
+select count(*) from (select distinct id, pid, character from roles4) as rip;
+select count(*) from roles4;
+
+--and verify the intersection
+
+select id, pid, character from roles2 intersect select id, pid, character from roles4;
+
+--and now concatenate them
+
+---WARNING: billing should be integer
+xxcreate roles as select * from roles2 union select * from roles4;
+
+* Make sure that the id is a primary key of the tables
+
+delete from color where id in (select id from color  except select id from productions );
+delete from countries where id in (select id from countries  except select id from productions );
+delete from directors where id in (select id from directors  except select id from productions );
+delete from episodes where id in (select id from episodes  except select id from productions );
+
+delete from genres where id in (select id from genres  except select id from productions );
+delete from ratings where id in (select id from ratings  except select id from productions );
+delete from languages where id in (select id from languages  except select id from productions );
+delete from links where id in (select id from links  except select id from productions );
+delete from locations where id in (select id from locations  except select id from productions );
+
+* Episodes
+
+--clean them up
+
+delete from episodes where episodeof in  (select id from episodes except select id from productions );
+
+
+
+update productions set attr = 'TV-ep' where id in (select id from episodes );
+
+
+roles and episodes
+
+
+delete from roles where id in (select id from roles  except select id from productions );
+
+
+* update tv-series
+
+drop table rip; create temp table rip as select  episodeof from episodes  except select id from productions where attr is not null;
+update productions set attr = 'TV-series' where id in (select episodeof from rip);
+
+
+
+
+* Sanitize
+
+create temp table  porn as select id from genres where genre = 'Adult';
+
+delete from color where id in (select id from porn);
+delete from countries where id in (select id from porn);
+delete from directors where id in (select id from porn);
+delete from episodes where id in (select id from porn);
+
+delete from genres where id in (select id from porn);
+delete from languages where id in (select id from porn);
+
+delete from links where id in (select id from porn);
+delete from links where idlinkedto in (select id from porn);
+
+delete from locations where id in (select id from porn);
+delete from ratings where id in (select id from porn);
+
+
+
+
+
+-- now from roles
+-- find ou who are por actors only
+create table pornactors as  (select pid from persons except select pid from roles) except select pid from directors;
+
+-- then delete them
+
+delete from persons where pid in (select pid from pornactors );
+delete from genres where id in (select id from porn);
+delete from productions where id in (select id from porn);
+
+
+delete from productions where id in (select id from porn);
+
+delete from roles where id in (select id from porn);
+
+delete from persons where id in (select id from porn);
+
+-- some more
+delete from productions where id in (select id from roles natural join productions  where pid = 'Jeremy, Ron' and attr = 'V');
+delete from productions where  id in (select id from productions where title ~ 'XXX' and attr = 'V');
+delete from productions where  id in (select id from productions where title ~* 'milf' and attr = 'V');
+delete from productions where  id in (select id from productions where title ~* ' anal ' and attr = 'V');
+delete from productions where  id in (select id from productions where title ~* ' horny ' and attr = 'V');
+delete from productions where attr = 'V' and id in (select  id from roles    where pid = 'North, Peter (I)');
+
+
+
+* Some indexes we haven't created
+
+create index rolesidx on roles(pid);
+
+
+* Clean up
+
+drop table person2;
+drop table persons2;
+drop table persons0;
