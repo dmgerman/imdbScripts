@@ -2,22 +2,38 @@
 
 create a database imdb
 
-using psql do this in the imdb database
+[[sql/imdb-schema.sql]]
 
--- this is done with do.sql
 
-\i color.sql 
-\i countries.sql 
-\i languages.sql 
-\i links.sql 
-\i locations.sql 
-\i movies.sql 
-\i person.sql 
-\i ratings.sql
-\i roles.sql 
-\i roles.sql 
+* Part one
 
-\i directors.sql 
+Load:
+
+- color
+- countries
+- directors
+- genres
+- languages
+- links
+- locations
+- ratings
+
+
+| color       |
+| countries   |
+| directors   |
+| genres      |
+| languages   |
+| links       |
+| locations   |
+| ratings     |
+| roles       |
+| aka         |
+
+| persons     |
+| productions |
+| episodes    |
+
 
 * Importing data from the database
 

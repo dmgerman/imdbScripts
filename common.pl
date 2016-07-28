@@ -176,7 +176,7 @@ sub Parse_Directed
 
  #this needs to be parse from the left
     # find the year first
-    die "[$role]" unless $role =~ /\([0-9\?]{4}[\/XIV]*\)/;
+    die "[$role]" unless $role =~ /\([0-9\?]{4}[\/XIVL]*\)/;
     my $prefix = $` . $&; #';
     $role = $'; #';
     # does it contain V/TV/VG

@@ -16,7 +16,13 @@ require "common.pl";
 
 my $dryRun = 1;
 
-my $dbh = DBI->connect("dbi:Pg:dbname=imdb-new", "", "",
+my $dbName = pop;
+
+if ($dbName eq "") {
+    die "Usage $0 <dbName";
+}
+
+my $dbh = DBI->connect("dbi:Pg:dbname=$dbName", "", "",
 		       { RaiseError => 1});
 
 $dbh->do("SET CLIENT_ENCODING TO 'LATIN1';");

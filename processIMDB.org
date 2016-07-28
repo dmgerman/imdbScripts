@@ -1,0 +1,697 @@
+
+|-------------+--------|
+|             | loaded | keys
+|-------------+--------|
+| aka         | x      |
+| color       | x      |
+| countries   | x      |
+| directors   | x      |
+| episodes    | x      |
+| genres      | x      |
+| languages   | x      |
+| links       | x      |
+| locations   | x      |
+| persons     | x      |
+| productions | x      |
+| ratings     | x      |
+| roles       | x      |
+
+
+* Check tables
+
+#+begin_src sql :engine postgresql :cmdline imdb
+select 
+(select count(*) from aka) as aka,
+(select count(*) from color) as color,
+(select count(*) from countries) as countries,
+(select count(*) from directors) as directors,
+(select count(*) from episodes) as episodes,
+(select count(*) from genres) as genres,
+(select count(*) from languages) as languages,
+(select count(*) from links) as links,
+(select count(*) from locations) as locations,
+(select count(*) from persons) as persons,
+(select count(*) from productions) as productions,
+(select count(*) from ratings) as ratings,
+(select count(*) from roles) as roles;
+#+end_src
+
+#+RESULTS:
+|    aka |   color | countries | directors | episodes |  genres | languages |  links | locations | persons | productions | ratings |    roles |
+|--------+---------+-----------+-----------+----------+---------+-----------+--------+-----------+---------+-------------+---------+----------|
+| 369264 | 1393897 |   1432380 |   1944981 |  1801937 | 1748320 |   1411171 | 342900 |    747600 | 3239058 |     2887021 |  538576 | 21727795 |
+
+
+
+
+
+* Step 1: process IMDB files
+
+Update [[./do.sh]] 
+
+It will generate all the data files. Update to corresponding source directories
+
+* Create productions
+
+** First do movies
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+--drop table movies;
+create table movies  (
+       id  varchar(400),
+       title    varchar(250),
+       year int,
+       yearid int,
+       yearrange varchar(50),
+       index varchar(5),
+       notes    varchar(500),
+       episode  varchar(400),
+       attr     varchar(152),
+       original varchar(500)
+);
+copy movies from '/tmp/b/movies.txt' with delimiter '|';
+#+end_src
+
+#+RESULTS:
+| SET          |
+|--------------|
+| CREATE TABLE |
+| COPY 2951996 |
+
+#+begin_src sql :engine postgresql :cmdline imdb
+\d productions
+#+end_src
+
+#+RESULTS:
+| Table "public.productions"                                                                                                 |                        |           |
+|----------------------------------------------------------------------------------------------------------------------------+------------------------+-----------|
+| Column                                                                                                                     | Type                   | Modifiers |
+| id                                                                                                                         | character varying(400) | not null  |
+| title                                                                                                                      | character varying(250) |           |
+| year                                                                                                                       | integer                |           |
+| index                                                                                                                      | character varying(5)   |           |
+| notes                                                                                                                      | character varying(500) |           |
+| attr                                                                                                                       | character varying(10)  |           |
+| Indexes:                                                                                                                   |                        |           |
+| "productionskey" PRIMARY KEY, btree (id) CLUSTER                                                                           |                        |           |
+| Referenced by:                                                                                                             |                        |           |
+| TABLE "aka" CONSTRAINT "aka_id_fkey" FOREIGN KEY (id) REFERENCES productions(id) ON DELETE CASCADE                         |                        |           |
+| TABLE "episodes" CONSTRAINT "episodes_episodeof_fkey" FOREIGN KEY (episodeof) REFERENCES productions(id) ON DELETE CASCADE |                        |           |
+| TABLE "episodes" CONSTRAINT "episodes_id_fkey" FOREIGN KEY (id) REFERENCES productions(id) ON DELETE CASCADE               |                        |           |
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+
+insert into productions(id, title, year, index, notes, attr) select id, title, cast(year as int), index, notes, attr from movies;
+
+update productions set notes = NULL where notes = '';
+update productions set attr = NULL where attr = '';
+#+end_src
+
+#+RESULTS:
+| SET              |
+|------------------|
+| INSERT 0 2951996 |
+| UPDATE 0         |
+| UPDATE 0         |
+
+
+
+* Step 2: create schemas
+
+#+begin_src sql :engine postgresql :cmdline imdb-new
+SET CLIENT_ENCODING TO 'LATIN1';
+DROP TABLE aka ;
+DROP TABLE color ;
+DROP TABLE countries ;
+DROP TABLE genres ;
+DROP TABLE languages ;
+DROP TABLE links ;
+DROP TABLE locations ;
+DROP TABLE ratings ;
+DROP TABLE directors;
+#+end_src
+
+#+RESULTS:
+| DROP TABLE |
+|------------|
+| DROP TABLE |
+| DROP TABLE |
+| DROP TABLE |
+| DROP TABLE |
+| DROP TABLE |
+| DROP TABLE |
+| DROP TABLE |
+| DROP TABLE |
+| DROP TABLE |
+
+#+begin_src sql :engine postgresql :cmdline imdb-new
+SET CLIENT_ENCODING TO 'LATIN1';
+CREATE TABLE aka (
+    id character varying(400),
+    akaid character varying(400),
+    note character varying(800)
+);
+
+CREATE TABLE color (
+    id character varying(400),
+    color character varying(100),
+    note character varying(100)
+);
+
+CREATE TABLE countries (
+    id character varying(400),
+    country character varying(100)
+);
+
+CREATE TABLE directors (
+    id character varying(400),
+    pid character varying(200),
+    dnote character varying(500)
+);
+
+CREATE TABLE genres (
+    id character varying(310),
+    genre character varying(20)
+);
+
+CREATE TABLE languages (
+    id character varying(400),
+    language character varying(100),
+    note character varying(100)
+);
+
+CREATE TABLE links (
+    id character varying(400),
+    idlinkedto character varying(400),
+    relationship character varying(30)
+);
+
+CREATE TABLE locations (
+    id character varying(400),
+    country character varying(100),
+    location character varying(1000),
+    note character varying(500)
+);
+
+CREATE TABLE ratings (
+    id character varying(400) NOT NULL,
+    dist character(10),
+    votes integer,
+    rank double precision
+);
+
+CREATE TABLE episodes (
+    id character varying(400) NOT NULL,
+    subtitle character varying(400),
+    season integer,
+    epnumber integer,
+    episodeof character varying(400)
+);
+
+#+end_src
+
+* Pupulate the schame of the basic tables
+
+#+RESULTS:
+| CREATE TABLE |
+|--------------|
+| CREATE TABLE |
+| CREATE TABLE |
+| CREATE TABLE |
+| CREATE TABLE |
+| CREATE TABLE |
+| CREATE TABLE |
+| CREATE TABLE |
+| CREATE TABLE |
+| CREATE TABLE |
+
+#+begin_src sql :engine postgresql :cmdline imdb-new
+SET CLIENT_ENCODING TO 'LATIN1';
+COPY color from '/tmp/b/color.txt' with delimiter '|';
+COPY countries from '/tmp/b/countries.txt' with delimiter '|';
+COPY directors from '/tmp/b/directors.txt' with delimiter '|';
+COPY genres from '/tmp/b/genres.txt' with delimiter '|';
+COPY languages from '/tmp/b/languages.txt' with delimiter '|';
+COPY links from '/tmp/b/links.txt' with delimiter '|';
+COPY locations from '/tmp/b/locations.txt' with delimiter '|';
+COPY ratings from '/tmp/b/ratings.txt' with delimiter '|';
+COPY episodes from '/tmp/b/episodes.txt' with delimiter '|';
+#+end_src
+
+#+RESULTS:
+| SET          |
+|--------------|
+| COPY 1379500 |
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+drop table aka;
+CREATE TABLE aka (
+    id character varying(400),
+    akaid character varying(800),
+    note character varying(800),
+    primary key (id, akaid, note)
+);
+COPY aka from '/tmp/b/aka.txt' with delimiter '|';
+#+end_src
+
+#+RESULTS:
+| SET          |
+|--------------|
+| DROP TABLE   |
+| CREATE TABLE |
+| COPY 379753  |
+
+
+* now we can do persons
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+drop table persons;
+drop table personsd;
+drop table personsm;
+drop table personsf;
+#+end_src
+
+#+RESULTS:
+| SET        |
+|------------|
+| DROP TABLE |
+| DROP TABLE |
+| DROP TABLE |
+| DROP TABLE |
+
+
+#+begin_src sql :engine postgresql :cmdline imdb
+\d persons
+#+end_src
+
+#+RESULTS:
+| Table "public.persons"                |                        |           |
+|---------------------------------------+------------------------+-----------|
+| Column                                | Type                   | Modifiers |
+| pid                                   | character varying(200) | not null  |
+| lastname                              | character varying(150) |           |
+| firstname                             | character varying(100) |           |
+| pindex                                | character varying(10)  |           |
+| gender                                | character(1)           |           |
+| Indexes:                              |                        |           |
+| "personskey" PRIMARY KEY, btree (pid) |                        |           |
+
+
+#+begin_src sql :engine postgresql :cmdline imdb
+CREATE TABLE persons (
+    pid character varying(200) NOT NULL,
+    lastname character varying(150),
+    firstname character varying(100),
+    pindex character varying(10),
+    gender character(1)
+);
+#+end_src
+
+#+RESULTS:
+| CREATE TABLE |
+|--------------|
+
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+CREATE TABLE personsd as select * from persons limit 0;
+CREATE TABLE personsm as select * from persons limit 0;
+CREATE TABLE personsf as select * from persons limit 0;
+#+end_src
+
+#+RESULTS:
+| SET      |
+|----------|
+| SELECT 0 |
+| SELECT 0 |
+| SELECT 0 |
+
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+drop table persons;
+copy personsd  from '/tmp/b/dirs-persons.txt' with delimiter '|';
+copy personsm  from '/tmp/b/actors.txt' with delimiter '|';
+copy personsf  from '/tmp/b/actress.txt' with delimiter '|';
+
+create table persons as select * from personsm union select * from personsf;
+
+create temp table tempper as select distinct pid, lastname, firstname, pindex from (select pid from persons group by pid having count(*) > 1) as rip natural join persons;
+
+-- remove gender unknown
+delete from persons where pid in (select pid from tempper);
+-- add them back with null
+insert into persons(pid, lastname, firstname, pindex) select pid, lastname, firstname, pindex from tempper;
+
+-- now directors
+create temp table tempdir as select pid from personsd except select pid from persons;
+insert into persons select pid, lastname, firstname, pindex from tempdir natural join personsd;
+
+drop table personsd;
+drop table personsm;
+drop table personsf;
+
+#+end_src
+
+#+RESULTS:
+| SET             |
+|-----------------|
+| DROP TABLE      |
+| COPY 353252     |
+| COPY 1991509    |
+| COPY 1085773    |
+| SELECT 3077282  |
+| SELECT 1750     |
+| DELETE 3500     |
+| INSERT 0 1750   |
+| SELECT 225286   |
+| INSERT 0 225286 |
+| DROP TABLE      |
+| DROP TABLE      |
+| DROP TABLE      |
+
+* Roles
+
+#+begin_src sql :engine postgresql :cmdline imdb
+CREATE TABLE roles (
+    id character varying(400) NOT NULL,
+    pid character varying(200) NOT NULL,
+    "character" character varying(1000),
+    billing integer,
+    snote character varying(200)
+);
+#+end_src
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+CREATE TABLE rolesm as select * from roles limit 0;
+CREATE TABLE rolesf as select * from roles limit 0;
+#+end_src
+
+#+RESULTS:
+| SET      |
+|----------|
+| SELECT 0 |
+| SELECT 0 |
+
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+COPY rolesm from '/tmp/b/actorRoles.txt' with delimiter '|';
+COPY rolesf from '/tmp/b/actressRoles.txt' with delimiter '|';
+#+end_src
+
+#+RESULTS:
+| SET           |
+|---------------|
+| COPY 13269590 |
+| COPY 7909866  |
+
+
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+create temp table ripro as select * from rolesf UNION select * from rolesm;
+create temp table ripro2 as select id,pid,character,count(*) from ripro group by id, pid, character having count(*) > 1;
+delete from ripro where (id, pid, character) in (select id,pid,character from ripro2);
+insert into roles select * from ripro;
+#+end_src
+
+* Persons
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+#+end_src
+
+
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+create temp table ripb as select pid from directors except select pid from persons;
+insert into persons select * from ripb;
+#+end_src
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+alter table persons add primary key(pid);
+#+end_src
+
+#+RESULTS:
+| SET         |
+|-------------|
+| ALTER TABLE |
+
+
+* Episodes
+
+** Create data
+
+perl /home/dmg/git.dmg/hacking/imdb/insert-episodes.pl| sort -u | perl /home/dmg/git.dmg/hacking/imdb/nullify.pl > $OUT/episodes.txt 
+
+** Load
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+copy episodes from '/tmp/b/episodes.txt' with delimiter '|';
+#+end_src
+
+#+RESULTS:
+| SET          |
+|--------------|
+| COPY 1815277 |
+
+
+** Deal with foreign keys
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+-- foreign keys
+delete from episodes where id in (select id from episodes  except select id from productions );
+delete from episodes where id in (select episodeof from episodes  except select id from productions );
+#+end_src
+
+#+RESULTS:
+| SET      |
+|----------|
+| DELETE 0 |
+| DELETE 0 |
+
+** Update attributes for episodes
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+update productions set attr = 'TV-ep' where id in (select id from episodes );
+create temp table rip as select  episodeof from episodes  except select id from productions where attr is not null;
+update productions set attr = 'TV-series' where id in (select episodeof from rip);
+#+end_src
+
+#+RESULTS:
+| SET            |
+|----------------|
+| UPDATE 1815277 |
+| SELECT 60768   |
+| UPDATE 60398   |
+
+
+
+* Sanitize
+
+** Create the porn table
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+--drop table porn;
+create table  porn as select id from genres where genre = 'Adult';
+#+end_src
+
+#+RESULTS:
+| SET          |
+|--------------|
+| DROP TABLE   |
+| SELECT 64976 |
+
+** Delete from the easy ones
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+
+delete from aka where id in (select id from porn);
+delete from color where id in (select id from porn);
+delete from countries where id in (select id from porn);
+delete from directors where id in (select id from porn);
+delete from episodes where id in (select id from porn);
+
+delete from genres where id in (select id from porn);
+delete from languages where id in (select id from porn);
+
+delete from links where id in (select id from porn);
+delete from links where idlinkedto in (select id from porn);
+
+delete from locations where id in (select id from porn);
+delete from ratings where id in (select id from porn);
+delete from roles where id in (select id from porn);
+
+delete from productions where id in (select id from porn);
+#+end_src
+
+#+RESULTS:
+| SET           |
+|---------------|
+| DELETE 10489  |
+| DELETE 62985  |
+| DELETE 64928  |
+| DELETE 48942  |
+| DELETE 1      |
+| DELETE 71049  |
+| DELETE 62781  |
+| DELETE 194689 |
+| DELETE 2068   |
+| DELETE 4885   |
+| DELETE 12533  |
+| DELETE 559071 |
+| DELETE 64975 |
+
+** delete from roles
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+
+-- now from roles
+-- find ou who are por actors only
+
+create table pornactors as  (select pid from persons except select pid from roles) except select pid from directors;
+
+-- then delete them
+
+delete from persons where pid in (select pid from pornactors );
+
+#+end_src
+
+#+RESULTS:
+| SET          |
+|--------------|
+| SELECT 61760 |
+| DELETE 61760 |
+
+
+
+* Fix foreign ids
+
+
+** removed missing ones
+
+#+begin_src sql :engine postgresql :cmdline imdb
+SET CLIENT_ENCODING TO 'LATIN1';
+
+create temp table tid as select id from productions;
+
+delete from aka where id in (select id from aka  except select id from tid );
+delete from color where id in (select id from color  except select id from tid );
+delete from countries where id in (select id from countries  except select id from tid );
+delete from directors where id in (select id from directors  except select id from tid );
+delete from episodes where id in (select id from episodes  except select id from tid );
+delete from episodes where episodeof in (select episodeof from episodes  except select id from tid );
+
+delete from genres where id in (select id from genres  except select id from tid );
+delete from ratings where id in (select id from ratings  except select id from tid );
+delete from languages where id in (select id from languages  except select id from tid );
+delete from links where id in (select id from links  except select id from tid );
+delete from links where idlinkedto in (select idlinkedto from links  except select id from tid );
+
+delete from locations where id in (select id from locations  except select id from tid );
+
+delete from roles where id in (select id from roles  except select id from tid );
+delete from roles where pid in (select pid from roles  except select pid from persons );
+delete from directors where pid in (select pid from directors  except select pid from persons );
+#+end_src
+
+#+RESULTS:
+| SET            |
+|----------------|
+| SELECT 2887021 |
+| DELETE 0       |
+| DELETE 119     |
+| DELETE 128     |
+| DELETE 387     |
+| DELETE 0       |
+| DELETE 13339   |
+| DELETE 246     |
+| DELETE 19      |
+| DELETE 113     |
+| DELETE 11      |
+| DELETE 5       |
+| DELETE 182     |
+| DELETE 5543    |
+| DELETE 5280    |
+| DELETE 5       |
+
+
+
+#+begin_src sql :engine postgresql :cmdline imdb
+
+update productions set attr = 'TV-series' where id in (select id from productions where title ~ '^".*"' and attr is null and not id ~ '{' );
+update productions set attr = 'TV-series' where id in (select id from productions where title ~ '^".*"' and attr is null );
+
+update productions set title =  substring(title, '^"(.+)"$') where id in (select id from productions where title ~ '^".*"');
+
+
+#+end_src
+
+#+RESULTS:
+| UPDATE 44546   |
+|----------------|
+| UPDATE 985     |
+| UPDATE 1921175 |
+
+
+* create keys  and foreign keys
+
+#+begin_src sql :engine postgresql :cmdline imdb
+alter table aka add foreign key (id) references productions on delete cascade;
+alter table color add foreign key (id) references productions on delete cascade;
+alter table countries add foreign key (id) references productions on delete cascade;
+alter table directors add foreign key (id) references productions on delete cascade;
+alter table directors add foreign key (pid) references persons on delete cascade;
+
+alter table episodes add foreign key (id) references productions on delete cascade;
+alter table episodes add foreign key (episodeof) references productions on delete cascade;
+
+alter table genres add foreign key (id) references productions on delete cascade;
+alter table languages add foreign key (id) references productions on delete cascade;
+alter table links add foreign key (idlinkedto) references productions on delete cascade;
+alter table links add foreign key (id) references productions on delete cascade;
+alter table locations add foreign key (id) references productions on delete cascade;
+alter table ratings add foreign key (id) references productions on delete cascade;
+
+alter table roles add foreign key (id) references productions on delete cascade;
+alter table roles add foreign key (pid) references persons on delete cascade;
+#+end_src
+
+* Grant
+
+#+begin_src sql :engine postgresql :cmdline imdb
+grant select on aka to public;
+grant select on color to public;
+grant select on countries to public;
+grant select on directors to public;
+grant select on episodes to public;
+grant select on genres to public;
+grant select on languages to public;
+grant select on links to public;
+grant select on locations to public;
+grant select on persons to public;
+grant select on productions to public;
+grant select on ratings to public;
+grant select on roles to public;
+grant select on top250 to public;
+grant select on usefulratings to public;
+#+end_src
+
+
+* YOU ARE DONE
+
+
